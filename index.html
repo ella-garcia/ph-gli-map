@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kerubin | Filipina-Led Startup Ecosystem Map</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b0e14;
+            --panel: rgba(20, 25, 35, 0.95);
+            --accent: #4ecca3;
+            --text: #e0e0e0;
+            --startup: #3498db;
+            --investor: #2ecc71;
+            --gov: #f1c40f;
+            --dfi: #e67e22;
+        }
+
+        body { margin: 0; background-color: var(--bg); font-family: 'Inter', sans-serif; color: var(--text); overflow: hidden; }
+        svg { width: 100vw; height: 100vh; cursor: grab; }
+        svg:active { cursor: grabbing; }
+
+        /* UI Panels */
+        #controls {
+            position: absolute; top: 20px; left: 20px; width: 300px;
+            background: var(--panel); padding: 25px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+
+        #dossier-sidebar {
+            position: absolute; right: -350px; top: 0; width: 320px; height: 100vh;
+            background: var(--panel); border-left: 1px solid var(--accent);
+            transition: right 0.4s cubic-bezier(0.075, 0.82, 0.165, 1);
+            padding: 40px 20px; z-index: 1000; box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+            overflow-y: auto;
+        }
+        #dossier-sidebar.open { right: 0; }
+
+        #form-overlay {
+            display: none; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+            width: 350px; background: var(--panel); padding: 30px; border-radius: 12px;
+            border: 1px solid var(--accent); z-index: 2000;
+        }
+
+        /* Buttons & Inputs */
+        .btn {
+            background: #21262d; border: 1px solid #30363d; color: #8b949e;
+            padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 12px; 
+            transition: 0.3s; width: 100%; margin-bottom: 10px;
+        }
+        .btn.active { background: var(--accent); color: #000; font-weight: 600; border: none; }
+        .btn:hover { border-color: var(--accent); color: white; }
+
+        input, select {
+            width: 100%; background: #0d1117; border: 1px solid #30363d; 
+            color: white; margin-bottom: 12px; padding: 10px; border-radius: 4px; box-sizing: border-box;
+        }
+
+        /* Visuals */
+        .link { stroke: #30363d; stroke-opacity: 0.3; stroke-width: 1.5px; fill: none; transition: 0.3s; }
+        .link.capital-flow { stroke: var(--accent); stroke-dasharray: 6, 4; animation: dash 3s linear infinite; stroke-opacity: 0.8; }
+        .link.highlighted { stroke: var(--accent); stroke-opacity: 1; stroke-width: 3px; }
+        @keyframes dash { to { stroke-dashoffset: -50; } }
+
+        .node { cursor: pointer; transition: opacity 0.3s, filter 0.3s; }
+        .node:hover { filter: brightness(1.5); }
+        .dimmed { opacity: 0.15 !important; }
+        .node-label { font-size: 10px; fill: #fff; pointer-events: none; text-anchor: middle; opacity: 0.7; }
+
+        .stat-box { background: #1a1f26; padding: 12px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #30363d; }
+        .stat-label { font-size: 9px; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+
+        .year-display { font-weight: bold; font-size: 24px; color: var(--accent); display: block; margin-bottom: 10px;}
+        input[type=range] { width: 100%; accent-color: var(--accent); margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+<!-- UI PANEL -->
+<div id="controls">
+    <h1 style="margin:0; font-size:20px; color:var(--accent);">KERUBIN MAP</h1>
+    <p style="font-size:11px; opacity:0.6; margin-bottom:20px;">Filipina-Led Startup Intelligence</p>
+    
+    <label style="font-size:10px; text-transform:uppercase;">Ecosystem Growth</label>
+    <span class="year-display" id="yearVal">2026</span>
+    <input type="range" id="timeline" min="2012" max="2026" value="2026">
+
+    <div style="display:flex; gap:10px;">
+        <button id="view-funding" class="btn active">Funding View</button>
+        <button id="view-gli" class="btn">GLI Lens</button>
+    </div>
+
+    <button class="btn" onclick="document.getElementById('form-overlay').style.display='block'" style="color:var(--accent); border-color:var(--accent);">+ Add Startup</button>
+</div>
+
+<!-- SIDEBAR -->
+<div id="dossier-sidebar">
+    <div style="cursor:pointer; font-size:12px; color:var(--accent);" onclick="closeSidebar()">✕ CLOSE</div>
+    <div id="dossier-content">
+        <h2 style="margin-top:40px;">Select an entity</h2>
+        <p>Click any node to view investment lineage and business details.</p>
+    </div>
+</div>
+
+<!-- FORM -->
+<div id="form-overlay">
+    <h2 style="margin-top:0; color:var(--accent);">Submit Startup</h2>
+    <input type="text" id="new-name" placeholder="Company Name">
+    <select id="new-sector">
+        <option>Fintech</option><option>Healthtech</option><option>Logistics</option><option>EdTech</option>
+    </select>
+    <input type="number" id="new-gli" placeholder="GLI Score (0-100% Female Board)">
+    <button class="btn active" onclick="addNewEntry()">Submit to Kerubin</button>
+    <button class="btn" onclick="document.getElementById('form-overlay').style.display='none'">Cancel</button>
+</div>
+
+<svg id="viz"></svg>
+
+<script>
+// --- FULL DATASET ---
+const dataset = {
+  "nodes": [
+    {"id": "kerubin_capital", "label": "Kerubin Capital", "type": "Angel", "shape": "diamond", "sector": "Gender Lens", "founded_year": 2021, "gli": 100, "funding": 5000000},
+    {"id": "1export", "label": "1Export", "type": "Startup", "shape": "circle", "sector": "Logistics", "founded_year": 2017, "gli": 85, "funding": 5000000},
+    {"id": "fortuna_cools", "label": "Fortuna Cools", "type": "Startup", "shape": "circle", "sector": "AgriTech", "founded_year": 2018, "gli": 90, "funding": 1000000},
+    {"id": "taxumo", "label": "Taxumo", "type": "Startup", "shape": "circle", "sector": "FinTech", "founded_year": 2016, "gli": 75, "funding": 3000000},
+    {"id": "unawa", "label": "UNAWA", "type": "Startup", "shape": "circle", "sector": "RegTech", "founded_year": 2017, "gli": 100, "funding": 1500000},
+    {"id": "parlon", "label": "Parlon", "type": "Startup", "shape": "circle", "sector": "Wellness", "founded_year": 2018, "gli": 100, "funding": 2000000},
+    {"id": "nona", "label": "nōna", "type": "Startup", "shape": "circle", "sector": "PropTech", "founded_year": 2022, "gli": 100, "funding": 500000},
+    {"id": "kindred", "label": "Kindred", "type": "Startup", "shape": "circle", "sector": "HealthTech", "founded_year": 2021, "gli": 100, "funding": 500000},
+    {"id": "great_deals", "label": "Great Deals", "type": "Startup", "shape": "circle", "sector": "E-Commerce", "founded_year": 2014, "gli": 60, "funding": 5000000},
+    {"id": "edukasyon", "label": "Edukasyon.ph", "type": "Startup", "shape": "circle", "sector": "EdTech", "founded_year": 2016, "gli": 80, "funding": 2500000},
+    {"id": "kumu", "label": "Kumu", "type": "Startup", "shape": "circle", "sector": "Social Media", "founded_year": 2018, "gli": 20, "funding": 20000000},
+    {"id": "paymongo", "label": "PayMongo", "type": "Startup", "shape": "circle", "sector": "FinTech", "founded_year": 2019, "gli": 30, "funding": 46000000},
+    {"id": "main", "label": "MAIN", "type": "Angel", "shape": "diamond", "sector": "Investing", "founded_year": 2017, "gli": 45, "funding": 10000000},
+    {"id": "investing_in_women", "label": "Investing in Women", "type": "DFI", "shape": "diamond", "sector": "Gender Lens", "founded_year": 2016, "gli": 95, "funding": 30000000},
+    {"id": "kickstart_ventures", "label": "Kickstart", "type": "Investor", "shape": "diamond", "sector": "VC", "founded_year": 2012, "gli": 40, "funding": 50000000},
+    {"id": "foxmont_capital", "label": "Foxmont", "type": "Investor", "shape": "diamond", "sector": "VC", "founded_year": 2018, "gli": 35, "funding": 25000000},
+    {"id": "qbo", "label": "QBO", "type": "Accelerator", "shape": "triangle", "sector": "Ecosystem", "founded_year": 2016, "gli": 50, "funding": 0},
+    {"id": "ideaspace", "label": "IdeaSpace", "type": "Accelerator", "shape": "triangle", "sector": "Ecosystem", "founded_year": 2012, "gli": 45, "funding": 0},
+    {"id": "dti", "label": "DTI", "type": "Government", "shape": "hexagon", "sector": "Gov", "founded_year": 1898, "gli": 50, "funding": 0},
+    {"id": "imaginable_impact", "label": "FoundHer", "type": "Ecosystem Builder", "shape": "rect", "sector": "Gender", "founded_year": 2022, "gli": 100, "funding": 0}
+  ],
+  "links": [
+    {"source": "kerubin_capital", "target": "1export", "is_capital_flow": true, "date": 2021},
+    {"source": "kerubin_capital", "target": "fortuna_cools", "is_capital_flow": true, "date": 2022},
+    {"source": "kerubin_capital", "target": "taxumo", "is_capital_flow": true, "date": 2021},
+    {"source": "kerubin_capital", "target": "unawa", "is_capital_flow": true, "date": 2022},
+    {"source": "investing_in_women", "target": "kerubin_capital", "is_capital_flow": true, "date": 2021},
+    {"source": "main", "target": "kerubin_capital", "is_capital_flow": false, "date": 2021},
+    {"source": "kickstart_ventures", "target": "taxumo", "is_capital_flow": true, "date": 2018},
+    {"source": "kickstart_ventures", "target": "kumu", "is_capital_flow": true, "date": 2019},
+    {"source": "foxmont_capital", "target": "parlon", "is_capital_flow": true, "date": 2020},
+    {"source": "qbo", "target": "taxumo", "is_capital_flow": false, "date": 2017},
+    {"source": "ideaspace", "target": "1export", "is_capital_flow": false, "date": 2017},
+    {"source": "imaginable_impact", "target": "kerubin_capital", "is_capital_flow": false, "date": 2023},
+    {"source": "dti", "target": "qbo", "is_capital_flow": false, "date": 2016}
+  ]
+};
+
+// --- ENGINE LOGIC ---
+let gliMode = false;
+const width = window.innerWidth, height = window.innerHeight;
+const svg = d3.select("#viz").append("g");
+
+// Zoom & Pan
+const zoom = d3.zoom().scaleExtent([0.3, 3]).on("zoom", (e) => svg.attr("transform", e.transform));
+d3.select("svg").call(zoom);
+
+const simulation = d3.forceSimulation(dataset.nodes)
+    .force("link", d3.forceLink(dataset.links).id(d => d.id).distance(220))
+    .force("charge", d3.forceManyBody().strength(-2000))
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("collide", d3.forceCollide().radius(60));
+
+const linkLayer = svg.append("g");
+const nodeLayer = svg.append("g");
+
+function updateMap(year) {
+    const filteredNodes = dataset.nodes.filter(n => n.founded_year <= year);
+    const nodeIds = new Set(filteredNodes.map(n => n.id));
+    const filteredLinks = dataset.links.filter(l => nodeIds.has(l.source.id || l.source) && nodeIds.has(l.target.id || l.target) && l.date <= year);
+
+    // LINKS
+    const l = linkLayer.selectAll(".link").data(filteredLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+    l.exit().remove();
+    const lEnter = l.enter().append("line")
+        .attr("class", d => d.is_capital_flow ? "link capital-flow" : "link");
+
+    // NODES
+    const n = nodeLayer.selectAll(".node-group").data(filteredNodes, d => d.id);
+    n.exit().remove();
+    
+    const nEnter = n.enter().append("g").attr("class", "node-group node")
+        .on("click", (e, d) => showDossier(d))
+        .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended));
+
+    nEnter.append("path").attr("class", "shape");
+    nEnter.append("text").attr("class", "node-label").attr("dy", 35).text(d => d.label);
+
+    simulation.nodes(filteredNodes);
+    simulation.force("link").links(filteredLinks);
+    simulation.alpha(1).restart();
+    refreshVisuals();
+}
+
+function refreshVisuals() {
+    const fundingScale = d3.scaleSqrt().domain([0, 50000000]).range([150, 2000]);
+    const gliScale = d3.scaleLinear().domain([0, 100]).range([100, 1800]);
+
+    d3.selectAll(".shape").transition().duration(750)
+        .attr("d", d => {
+            const size = gliMode ? gliScale(d.gli) : fundingScale(d.funding || 500000);
+            const type = d.shape === "diamond" ? d3.symbolDiamond : 
+                         d.shape === "triangle" ? d3.symbolTriangle : 
+                         d.shape === "hexagon" ? d3.symbolWye : d3.symbolCircle;
+            return d3.symbol().type(type).size(size)();
+        })
+        .attr("fill", d => {
+            if (gliMode) return d3.interpolateViridis(d.gli / 100);
+            const colors = {"Startup": "#3498db", "Investor": "#2ecc71", "Angel": "#4ecca3", "DFI": "#e67e22", "Accelerator": "#9b59b6", "Government": "#f1c40f"};
+            return colors[d.type] || "#888";
+        });
+}
+
+// FEATURE: DOSSIER & LINEAGE
+function showDossier(d) {
+    const sidebar = document.getElementById('dossier-sidebar');
+    const content = document.getElementById('dossier-content');
+    sidebar.classList.add('open');
+
+    // Highlight Path
+    const connectedNodeIds = new Set([d.id]);
+    const connectedLinks = dataset.links.filter(l => {
+        if (l.source.id === d.id || l.target.id === d.id) {
+            connectedNodeIds.add(l.source.id);
+            connectedNodeIds.add(l.target.id);
+            return true;
+        }
+    });
+
+    d3.selectAll(".node").classed("dimmed", n => !connectedNodeIds.has(n.id));
+    d3.selectAll(".link").classed("highlighted", l => connectedLinks.includes(l));
+
+    content.innerHTML = `
+        <h1 style="color:var(--accent); margin-bottom:5px;">${d.label}</h1>
+        <p style="font-size:12px; opacity:0.6; margin-top:0;">Founded ${d.founded_year}</p>
+        
+        <div class="stat-box">
+            <div class="stat-label">Gender Lens Intensity</div>
+            <div style="font-size:22px; font-weight:bold; color:var(--accent);">${d.gli}%</div>
+            <div style="font-size:10px; opacity:0.5;">Female Leadership & Board</div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Entity Status</div>
+            <div style="font-size:14px;">${d.type} • ${d.sector}</div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Capital Visibility</div>
+            <div style="font-size:14px;">${d.funding > 0 ? '$' + (d.funding/1000000).toFixed(1) + 'M Raised' : 'Seed / Bootstrap'}</div>
+        </div>
+
+        <button class="btn active" style="margin-top:20px;">Contact Founder</button>
+        <button class="btn">View Investment Thesis</button>
+    `;
+}
+
+function closeSidebar() {
+    document.getElementById('dossier-sidebar').classList.remove('open');
+    d3.selectAll(".node").classed("dimmed", false);
+    d3.selectAll(".link").classed("highlighted", false);
+}
+
+// ADD NEW STARTUP
+function addNewEntry() {
+    const name = document.getElementById('new-name').value;
+    const gli = +document.getElementById('new-gli').value;
+    if(!name) return;
+
+    const newNode = { id: name.toLowerCase().replace(" ","_"), label: name, type: "Startup", shape: "circle", sector: document.getElementById('new-sector').value, founded_year: 2026, gli: gli, funding: 0 };
+    dataset.nodes.push(newNode);
+    dataset.links.push({source: "kerubin_capital", target: newNode.id, date: 2026, is_capital_flow: false});
+    
+    document.getElementById('form-overlay').style.display = 'none';
+    updateMap(2026);
+}
+
+// TICK
+simulation.on("tick", () => {
+    svg.selectAll(".link").attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+    svg.selectAll(".node-group").attr("transform", d => `translate(${d.x},${d.y})`);
+});
+
+// UI EVENT HANDLERS
+d3.select("#timeline").on("input", function() {
+    const y = +this.value;
+    d3.select("#yearVal").text(y);
+    updateMap(y);
+});
+
+d3.select("#view-gli").on("click", function() {
+    gliMode = true;
+    d3.select(this).classed("active", true);
+    d3.select("#view-funding").classed("active", false);
+    refreshVisuals();
+});
+
+d3.select("#view-funding").on("click", function() {
+    gliMode = false;
+    d3.select(this).classed("active", true);
+    d3.select("#view-gli").classed("active", false);
+    refreshVisuals();
+});
+
+function dragstarted(event) { if (!event.active) simulation.alphaTarget(0.3).restart(); event.subject.fx = event.subject.x; event.subject.fy = event.subject.y; }
+function dragged(event) { event.subject.fx = event.x; event.subject.fy = event.y; }
+function dragended(event) { if (!event.active) simulation.alphaTarget(0); event.subject.fx = null; event.subject.fy = null; }
+
+// INIT
+updateMap(2026);
+</script>
+</body>
+</html>
